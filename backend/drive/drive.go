@@ -873,7 +873,7 @@ type Fs struct {
 	permissionsMu    *sync.Mutex                  // protect the below
 	permissions      map[string]*drive.Permission // map permission IDs to Permissions
 	//-----------------------------------------------------------
-	ServiceAccountFiles *SaInfo
+	ServiceAccountFiles *ServiceAccountPool
 	waitChangeSvc       *sync.Mutex
 	FileObj             *fs.Object
 	maybeIsFile         bool
@@ -1002,7 +1002,10 @@ func (f *Fs) changeSvc(ctx context.Context) {
 	 *  获取sa文件列表
 	 */
 	if sfp.isPoolEmpty() {
-		sfp.loadInfoFromDir(opt.ServiceAccountFilePath, oldFile)
+		if _, err := sfp.Load(opt); err != nil {
+			fs.Errorf(nil, "Failed to load service accounts: %v", err)
+			return
+		}
 	}
 
 	err, newSa := sfp.staleSa("")
@@ -1033,7 +1036,10 @@ func (f *Fs) rollingSvc(ctx context.Context) {
 	opt := &f.opt
 	sfp := f.ServiceAccountFiles
 	if sfp.isPoolEmpty() {
-		sfp.loadInfoFromDir(opt.ServiceAccountFilePath, opt.ServiceAccountFile)
+		if _, err := sfp.Load(opt); err != nil {
+			fs.Errorf(nil, "Failed to load service accounts: %v", err)
+			return
+		}
 	}
 	newSa := sfp.rollup()
 	if err := f.changeServiceAccountFile(ctx, os.ExpandEnv(newSa)); err == nil {
@@ -1444,7 +1450,7 @@ func newFs(ctx context.Context, name, path string, m configmap.Mapper) (*Fs, err
 	err := configstruct.Set(m, opt)
 	//-----------------------------------------------------------
 	maybeIsFile := false
-	saInfo := new(SaInfo)
+	saPool := NewServiceAccountPool(ctx, 100)
 	// 添加  {id} 作为根目录功能
 	if path != "" && path[0:1] == "{" {
 		idIndex := strings.Index(path, "}")
@@ -1465,9 +1471,10 @@ func newFs(ctx context.Context, name, path string, m configmap.Mapper) (*Fs, err
 	// if enable random pick sa
 	if opt.RandomPickSA {
 		if opt.ServiceAccountFilePath != "" {
-			saInfo.loadInfoFromDir(opt.ServiceAccountFilePath, opt.ServiceAccountFile)
-			if ranIdx := saInfo.randomPick(); ranIdx != -1 {
-				opt.ServiceAccountFile = saInfo.sas[ranIdx].saPath
+			if _, err := saPool.Load(opt); err != nil {
+				fs.Errorf(nil, "Failed to load service accounts: %v", err)
+			} else if ranIdx := saPool.randomPick(); ranIdx != -1 {
+				opt.ServiceAccountFile = saPool.sas[ranIdx].saPath
 			}
 		}
 	}
@@ -1521,7 +1528,7 @@ func newFs(ctx context.Context, name, path string, m configmap.Mapper) (*Fs, err
 		permissions:     make(map[string]*drive.Permission),
 		//-----------------------------------------------------------
 		waitChangeSvc:       new(sync.Mutex),
-		ServiceAccountFiles: saInfo,
+		ServiceAccountFiles: saPool,
 		//-----------------------------------------------------------
 	}
 	f.isTeamDrive = opt.TeamDriveID != ""
