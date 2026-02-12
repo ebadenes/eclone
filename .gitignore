@@ -18,6 +18,8 @@ vendor/
 _junk/
 rclone
 rclone.exe
+eclone
+eclone.exe
 build
 docs/public
 rclone.iml
