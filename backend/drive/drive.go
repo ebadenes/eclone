@@ -76,6 +76,13 @@ const (
 	listRGrouping    = 50   // number of IDs to search at once when using ListR
 	listRInputBuffer = 1000 // size of input buffer when using ListR
 	defaultXDGIcon   = "text-html"
+	//-----------------------------------------------------------
+	// eclone: SA pool constants (ported from fclone)
+	defaultSAMinSleep      = fs.Duration(100 * time.Millisecond) // min time between SA changes
+	defaultSAPacerMinSleep = fs.Duration(50 * time.Millisecond)  // lower pacer sleep when many SAs
+	defaultMaxServices     = 100                                 // max preloaded services in memory
+	defaultPreloadServices = 50                                  // services to preload at startup
+	//-----------------------------------------------------------
 )
 
 // Globals
@@ -776,6 +783,24 @@ two accounts.
 				Help:     "Random pick sa file from service account file path",
 				Default:  false,
 				Advanced: true,
+			}, {
+				Name:     "service_account_min_sleep",
+				Default:  defaultSAMinSleep,
+				Help:     "Minimum time to sleep between service account changes.\n\nPrevents rapid SA exhaustion under heavy rate limiting.",
+				Hide:     fs.OptionHideConfigurator,
+				Advanced: true,
+			}, {
+				Name:     "services_preload",
+				Default:  defaultPreloadServices,
+				Help:     "Number of service account Drive services to preload at startup.\n\nEliminates 200-500ms OAuth setup latency during SA switches.",
+				Hide:     fs.OptionHideConfigurator,
+				Advanced: true,
+			}, {
+				Name:     "services_max",
+				Default:  defaultMaxServices,
+				Help:     "Maximum number of preloaded Drive services kept in memory.",
+				Hide:     fs.OptionHideConfigurator,
+				Advanced: true,
 			},
 			//-----------------------------------------------------------
 		}...),
@@ -845,6 +870,9 @@ type Options struct {
 	RollingSA              bool   `config:"rolling_sa"`
 	RollingCount           int    `config:"rolling_count"`
 	RandomPickSA           bool   `config:"random_pick_sa"`
+	ServiceAccountMinSleep fs.Duration `config:"service_account_min_sleep"`
+	ServicesPreload        int         `config:"services_preload"`
+	ServicesMax            int         `config:"services_max"`
 	//-----------------------------------------------------------
 }
 
@@ -875,6 +903,7 @@ type Fs struct {
 	//-----------------------------------------------------------
 	ServiceAccountFiles *ServiceAccountPool
 	waitChangeSvc       *sync.Mutex
+	lastChangeSATime    time.Time
 	FileObj             *fs.Object
 	maybeIsFile         bool
 	//-----------------------------------------------------------
@@ -959,19 +988,18 @@ func (f *Fs) shouldRetry(ctx context.Context, err error) (bool, error) {
 		}
 		if len(gerr.Errors) > 0 {
 			reason := gerr.Errors[0].Reason
-			if reason == "rateLimitExceeded" || reason == "userRateLimitExceeded" {
+			message := gerr.Errors[0].Message
+			if reason == "rateLimitExceeded" || reason == "userRateLimitExceeded" || reason == "dailyLimitExceededUnreg" || strings.HasPrefix(message, "Daily Limit") {
 				//-----------------------------------------------------------
-				// if exists ServiceAccountFilePath
-				// not set `--drive-stop-on-upload-limit`
-				// call `changeSvc` to retry
-				if f.opt.ServiceAccountFilePath != "" && !f.opt.StopOnUploadLimit {
+				// Switch SA if: SA path configured, throttle allows it, and not stopping on upload limit
+				if f.shouldChangeSA() && !f.opt.StopOnUploadLimit {
 					f.waitChangeSvc.Lock()
 					f.changeSvc(ctx)
 					f.waitChangeSvc.Unlock()
 					return true, err
 				}
 				//-----------------------------------------------------------
-				if f.opt.StopOnUploadLimit && gerr.Errors[0].Message == "User rate limit exceeded." {
+				if f.opt.StopOnUploadLimit && message == "User rate limit exceeded." {
 					fs.Errorf(f, "Received upload limit error: %v", err)
 					return false, fserrors.FatalError(err)
 				}
@@ -993,61 +1021,80 @@ func (f *Fs) shouldRetry(ctx context.Context, err error) (bool, error) {
 
 //-----------------------------------------------------------
 
-// patch 1: 替换 service file
+// shouldChangeSA determines whether enough time has passed since the last SA change.
+// This prevents rapid SA exhaustion under heavy rate limiting (anti-thrashing).
+func (f *Fs) shouldChangeSA() bool {
+	if f.opt.ServiceAccountFilePath == "" {
+		return false
+	}
+	return time.Duration(f.opt.ServiceAccountMinSleep) == 0 ||
+		time.Since(f.lastChangeSATime) > time.Duration(f.opt.ServiceAccountMinSleep)
+}
+
+// changeSvc switches to a new service account when the current one hits rate limits.
+// Uses the pool's blacklist-aware random selection and recycles the old service.
 func (f *Fs) changeSvc(ctx context.Context) {
 	opt := &f.opt
-	sfp := f.ServiceAccountFiles
-	oldFile := opt.ServiceAccountFile
-	/**
-	 *  获取sa文件列表
-	 */
-	if sfp.isPoolEmpty() {
-		if _, err := sfp.Load(opt); err != nil {
+	pool := f.ServiceAccountFiles
+
+	// Load SA files if pool is empty
+	if len(pool.Files) == 0 {
+		if _, err := pool.Load(opt); err != nil {
 			fs.Errorf(nil, "Failed to load service accounts: %v", err)
 			return
 		}
 	}
-
-	err, newSa := sfp.staleSa("")
-
-	/**
-	 *  replace action in `changeServiceAccountFile`
-	 */
-	if err {
-		fmt.Println("stale sa file: ", oldFile, " failed! ")
+	if len(pool.Files) == 0 {
+		fs.Errorf(nil, "No available service account files")
 		return
 	}
 
-	/**
-	 * 创建 client 和 svc
-	 * replace old change function with offical one
-	 */
-	if err := f.changeServiceAccountFile(ctx, os.ExpandEnv(newSa)); err == nil {
-		sfp.activeSa(newSa)
-		fs.Logf(nil, "loading eclone sa file: %s", opt.ServiceAccountFile)
-	} else {
-		sfp.revertStaleSa(oldFile)
-		fmt.Println("change sa file: ", newSa, " failed: ", err)
+	// Get a new SA file, blacklisting the current one
+	oldFile := opt.ServiceAccountFile
+	newFile, err := pool.GetFile(oldFile)
+	if err != nil {
+		fs.Errorf(nil, "Failed to get new service account file: %v", err)
+		return
 	}
+
+	// Recycle the old service into the preloaded pool before switching
+	if f.svc != nil && f.client != nil {
+		pool.AddService(f.client, f.svc)
+	}
+
+	// Switch to the new SA file
+	if err := f.changeServiceAccountFile(ctx, newFile); err != nil {
+		fs.Errorf(nil, "Failed to change to SA file %s: %v", newFile, err)
+		return
+	}
+
+	// Update the gclone-style index for rollup compatibility
+	pool.activeSa(newFile)
+	fs.Debugf(nil, "Service Account changed to %s (remaining: %d)", opt.ServiceAccountFile, len(pool.Files))
 }
 
-// rolling sa account
+// rollingSvc proactively switches to the next SA in sequential order (rollup).
+// This is gclone's unique feature — it rotates SA before each operation
+// rather than waiting for rate limit errors.
 func (f *Fs) rollingSvc(ctx context.Context) {
 	opt := &f.opt
-	sfp := f.ServiceAccountFiles
-	if sfp.isPoolEmpty() {
-		if _, err := sfp.Load(opt); err != nil {
+	pool := f.ServiceAccountFiles
+	if pool.isPoolEmpty() {
+		if _, err := pool.Load(opt); err != nil {
 			fs.Errorf(nil, "Failed to load service accounts: %v", err)
 			return
 		}
 	}
-	newSa := sfp.rollup()
-	if err := f.changeServiceAccountFile(ctx, os.ExpandEnv(newSa)); err == nil {
-		sfp.activeSa(newSa)
-		fs.Infof(nil, "rolling eclone sa file: %s", newSa)
+	newSa := pool.rollup()
+	if newSa == "" {
+		fs.Errorf(nil, "No available SA for rolling rotation")
+		return
+	}
+	if err := f.changeServiceAccountFile(ctx, newSa); err == nil {
+		pool.activeSa(newSa)
+		fs.Infof(nil, "Rolling SA to: %s", newSa)
 	} else {
-		// fs.Errorf(f, "roll sa file: %s failed: %w", newSa, err)
-		fmt.Println("roll sa file: ", newSa, " failed: ", err)
+		fs.Errorf(nil, "Rolling SA to %s failed: %v", newSa, err)
 	}
 }
 
@@ -1450,8 +1497,8 @@ func newFs(ctx context.Context, name, path string, m configmap.Mapper) (*Fs, err
 	err := configstruct.Set(m, opt)
 	//-----------------------------------------------------------
 	maybeIsFile := false
-	saPool := NewServiceAccountPool(ctx, 100)
-	// 添加  {id} 作为根目录功能
+	saPool := NewServiceAccountPool(ctx, opt.ServicesMax)
+	// Add {id} as root directory support
 	if path != "" && path[0:1] == "{" {
 		idIndex := strings.Index(path, "}")
 		if idIndex > 0 {
@@ -1468,13 +1515,20 @@ func newFs(ctx context.Context, name, path string, m configmap.Mapper) (*Fs, err
 			path = path[idIndex+1:]
 		}
 	}
-	// if enable random pick sa
-	if opt.RandomPickSA {
-		if opt.ServiceAccountFilePath != "" {
-			if _, err := saPool.Load(opt); err != nil {
-				fs.Errorf(nil, "Failed to load service accounts: %v", err)
-			} else if ranIdx := saPool.randomPick(); ranIdx != -1 {
+	// Load SA pool and optionally auto-assign initial SA
+	if opt.ServiceAccountFilePath != "" {
+		if _, err := saPool.Load(opt); err != nil {
+			fs.Errorf(nil, "Failed to load service accounts: %v", err)
+		} else if opt.RandomPickSA {
+			// Random pick from loaded SAs
+			if ranIdx := saPool.randomPick(); ranIdx != -1 {
 				opt.ServiceAccountFile = saPool.sas[ranIdx].saPath
+			}
+		} else if opt.ServiceAccountFile == "" && len(saPool.Files) > 0 {
+			// Auto-assign first available SA if none configured
+			if file, err := saPool.GetFile(""); err == nil {
+				opt.ServiceAccountFile = file
+				fs.Debugf(nil, "Auto-assigned Service Account File: %s", file)
 			}
 		}
 	}
@@ -1565,6 +1619,19 @@ func newFs(ctx context.Context, name, path string, m configmap.Mapper) (*Fs, err
 
 	//-----------------------------------------------------------
 	f.maybeIsFile = maybeIsFile
+
+	// Preload SA services for instant switching (fclone feature)
+	if len(f.ServiceAccountFiles.Files) > 0 {
+		if svcs, err := f.ServiceAccountFiles.PreloadServices(f, f.opt.ServicesPreload); err == nil {
+			// Auto-lower pacer min sleep when many SAs are available
+			// (more SAs = more headroom, less need for conservative pacing)
+			if len(svcs) > 10 && opt.PacerMinSleep >= defaultMinSleep {
+				f.opt.PacerMinSleep = defaultSAPacerMinSleep
+				f.pacer = fs.NewPacer(ctx, pacer.NewGoogleDrive(pacer.MinSleep(f.opt.PacerMinSleep), pacer.Burst(f.opt.PacerBurst)))
+				fs.Debugf(nil, "Auto-lowered pacer min sleep to %v (>10 SAs preloaded)", f.opt.PacerMinSleep)
+			}
+		}
+	}
 	//-----------------------------------------------------------
 
 	return f, nil
@@ -3528,6 +3595,9 @@ func (f *Fs) changeChunkSize(chunkSizeString string) (err error) {
 }
 
 func (f *Fs) changeServiceAccountFile(ctx context.Context, file string) (err error) {
+	// Record the time of SA change for throttle guard
+	f.lastChangeSATime = time.Now()
+
 	fs.Debugf(nil, "Changing Service Account File from %s to %s", f.opt.ServiceAccountFile, file)
 	if file == f.opt.ServiceAccountFile {
 		return nil
@@ -3553,6 +3623,11 @@ func (f *Fs) changeServiceAccountFile(ctx context.Context, file string) (err err
 	if err != nil {
 		return fmt.Errorf("drive: failed when making oauth client: %w", err)
 	}
+
+	// Reset the pacer for the new SA — fresh backoff avoids inheriting
+	// the old SA's exponential sleep times
+	f.pacer = fs.NewPacer(ctx, pacer.NewGoogleDrive(pacer.MinSleep(f.opt.PacerMinSleep), pacer.Burst(f.opt.PacerBurst)))
+
 	f.client = oAuthClient
 	f.svc, err = drive.NewService(context.Background(), option.WithHTTPClient(f.client))
 	if err != nil {
