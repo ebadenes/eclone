@@ -1,121 +1,124 @@
-  
-# gclone
+# eclone
 
-A modified version of the [rclone](//github.com/rclone/rclone)
+An enhanced fork of [rclone](https://github.com/rclone/rclone) with advanced Google Drive Service Account (SA) rotation.
 
-Implement [donwa/gclone](https://github.com/donwa/gclone) to sync with rclone version
+Based on [gclone](https://github.com/dogbutcat/gclone) with additional features ported from [fclone](https://github.com/mawaya/rclone), including SA preloading, 25-hour blacklisting, and anti-thrashing protection.
 
-Provide dynamic replacement sa file support for google drive operation
+## Features
 
+All standard rclone features, plus:
 
-## BUILD
+- **Dynamic SA rotation** - Automatically switches service account files when rate-limited
+- **SA preloading** - Pre-creates OAuth services at startup to eliminate switch latency
+- **25h blacklist** - Temporarily blacklists rate-limited SAs (aligns with Google's daily quota reset)
+- **Anti-thrashing** - Configurable minimum sleep between SA changes
+- **Rolling SA** - Proactive SA rotation for balanced usage across all service accounts
+- **Folder ID support** - Use `{folder_id}` syntax for direct access to shared drives and folders
 
-### Prepare
+## Build
+
+### Prerequisites
 
 ```
-#Windows cgo
+# Windows (cgo)
 WinFsp, gcc (e.g. from Mingw-builds)
 
-#macOS
+# macOS
 FUSE for macOS, command line tools
 
-#Linux
+# Linux
 libfuse-dev, gcc
 ```
 
-### Step
-- _(optional)_ install [cgofuse](https://github.com/billziss-gh/cgofuse)
-- build
-  ```
-  go build -v -tags 'cmount' gclone.go
-  ```
+### Build
 
-### Check
-
-```
-./gclone version
+```sh
+go build -v -tags 'cmount' eclone.go
 ```
 
-> if need `mount` function, cgofuse is required, 
+### Verify
 
-## Instructions 
-### 1.service_account_file_path Configuration   
-add `service_account_file_path` Configuration.For dynamic replacement service_account_file(sa file). Replace configuration when `rateLimitExceeded` error occurs
-`rclone.conf` example:  
+```sh
+./eclone eversion
+```
+
+> If you need the `mount` function, cgofuse is required.
+
+## Configuration
+
+### 1. Service Account File Path
+
+Add `service_account_file_path` to your config for dynamic SA rotation. SAs are switched automatically when `rateLimitExceeded` errors occur.
+
+`rclone.conf` example:
 ```
 [gc]
-type = drive  
-scope = drive  
-service_account_file = /root/accounts/1.json  
-service_account_file_path = /root/accounts/  
-root_folder_id = root  
-```
-`/root/accounts/` Folder contains multiple access and edit permissions ***service account file(*.json)***.  
-  
-### 2.Support incoming id
-If the original rclone is across team disks or shared folders, multiple configuration drive letters are required for operation.
-gclone supports incoming id operation
-```
-gclone copy gc:{folder_id1} gc:{folder_id2}  --drive-server-side-across-configs
-```
-folder_id1 can be:Common directory, shared directory, team disk. 
-  
-```
-gclone copy gc:{folder_id1} gc:{folder_id2}/media/  --drive-server-side-across-configs
-
+type = drive
+scope = drive
+service_account_file = /root/accounts/1.json
+service_account_file_path = /root/accounts/
+root_folder_id = root
 ```
 
-```
-gclone copy gc:{share_field_id} gc:{folder_id2}  --drive-server-side-across-configs
-```
+The `/root/accounts/` folder should contain multiple service account files (`*.json`) with appropriate permissions.
 
-### 3.Support command line option `--drive-service-account-file-path`
+### 2. Folder ID Support
+
+eclone supports passing folder/file IDs directly using curly braces:
 
 ```sh
-gclone copy gc:{share_field_id} gc:{folder_id2} --drive-service-account-file-path=${SOMEWHERE_STORE_SAs}
+eclone copy gc:{folder_id1} gc:{folder_id2} --drive-server-side-across-configs
 ```
-
-### 4.Support command line option `--drive-rolling-sa` and `--drive-rolling-count`
 
 ```sh
-gclone copy gc:{share_field_id} gc:{folder_id2} --drive-rolling-sa --drive-rolling-count=1
+eclone copy gc:{folder_id1} gc:{folder_id2}/media/ --drive-server-side-across-configs
 ```
-
-> What is rolling sa?
-
-- This option main for backup large drive, intent for using all sa more balance, not to consume one sa in one time, as I found there's some wired scen when sa was consumed.
-
-> What is rolling count?
-
-- every action in rclone using go routine, actually it is for waitgroup count, same sa will use within action.
-By default is 1, not recommand set value over 4, in my test bigger file should with smaller count.
-
-### 5.Support command line option `--drive-random-pick-sa`
 
 ```sh
-gclone copy gc:{share_field_id} gc:{folder_id2} --drive-random-pick-sa --drive-rolling-sa --drive-rolling-count=1
+eclone copy gc:{share_field_id} gc:{folder_id2} --drive-server-side-across-configs
 ```
 
-- take random sa file from `service account file path` config instead of configed one. Good companion with `rolling sa` config.
-
-### 6.Support new command `gselfupdate` and `gversion`
-
-From `1.64.0-mod1.6.0` gclone add new command to update itself, parallel working with rclone's `selfupdate`
+### 3. Command Line Options
 
 ```sh
-gclone gselfupdate [--check] [--output [of]] [--version [v]] [--package [zip|deb|rpm]]
+# Specify SA path via command line
+eclone copy gc:{id1} gc:{id2} --drive-service-account-file-path=/path/to/SAs/
+
+# Rolling SA mode (proactive rotation)
+eclone copy gc:{id1} gc:{id2} --drive-rolling-sa --drive-rolling-count=1
+
+# Random initial SA selection
+eclone copy gc:{id1} gc:{id2} --drive-random-pick-sa --drive-rolling-sa --drive-rolling-count=1
 ```
-  
-## CAVEATS
 
-Creating Service Accounts (SAs) allows you to bypass some of Google's quotas. Tools like autorclone and clonebot (gclone) automatically rotate SAs for continuous multi-terabyte file transfer.
+#### Rolling SA
 
-> Quotas SAs **CAN** bypass:
+Rotates SAs proactively before each operation for balanced usage across all service accounts, rather than exhausting one SA at a time.
 
-* Google 'copy/upload' quota (750GB/account/day)
-* Google 'download' quota (10TB/account/day)
+#### Rolling Count
 
-> Quotas SAs **CANNOT** bypass:
+Controls the waitgroup count for parallel operations sharing the same SA. Default is 1. Values over 4 are not recommended; larger files work better with smaller counts.
 
-* Google Shared Drive quota (~20TB/drive/day)
-* Google file owner quota (~2TB/day)
+### 4. Self-Update
+
+```sh
+eclone eselfupdate [--check] [--output path] [--version v] [--package zip|deb|rpm]
+```
+
+## Quotas
+
+Service Accounts (SAs) allow bypassing some Google quotas:
+
+**CAN bypass:**
+- Google 'copy/upload' quota (750GB/account/day)
+- Google 'download' quota (10TB/account/day)
+
+**CANNOT bypass:**
+- Google Shared Drive quota (~20TB/drive/day)
+- Google file owner quota (~2TB/day)
+
+## Credits
+
+- [rclone](https://github.com/rclone/rclone) - The original cloud sync tool
+- [gclone](https://github.com/dogbutcat/gclone) - SA rotation foundation
+- [fclone](https://github.com/mawaya/rclone) - Advanced SA pool features

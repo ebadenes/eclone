@@ -27,7 +27,7 @@ import (
 	"github.com/rclone/rclone/lib/random"
 	"github.com/spf13/cobra"
 
-	versionCmd "github.com/dogbutcat/gclone/cmd/version"
+	versionCmd "github.com/ebadenes/eclone/cmd/version"
 )
 
 //go:embed selfupdate.md
@@ -53,14 +53,14 @@ func init() {
 	flags.StringVarP(cmdFlags, &Opt.Output, "output", "", Opt.Output, "Save the downloaded binary at a given path (default: replace running binary)", "")
 	// flags.BoolVarP(cmdFlags, &Opt.Stable, "stable", "", Opt.Stable, "Install stable release (this is the default)", "")
 	// flags.BoolVarP(cmdFlags, &Opt.Beta, "beta", "", Opt.Beta, "place holder", "")
-	flags.StringVarP(cmdFlags, &Opt.Version, "version", "", Opt.Version, "Install the given gclone version (default: latest)", "")
+	flags.StringVarP(cmdFlags, &Opt.Version, "version", "", Opt.Version, "Install the given eclone version (default: latest)", "")
 	flags.StringVarP(cmdFlags, &Opt.Package, "package", "", Opt.Package, "Package format: zip|deb|rpm (default: zip)", "")
 }
 
 var cmdSelfUpdate = &cobra.Command{
-	Use:     "gselfupdate",
-	Aliases: []string{"g-self-update"},
-	Short:   `Update the gclone binary.`,
+	Use:     "eselfupdate",
+	Aliases: []string{"e-self-update"},
+	Short:   `Update the eclone binary.`,
 	Long:    strings.ReplaceAll(selfUpdateHelp, "|", "`"),
 	Annotations: map[string]string{
 		"versionIntroduced": "v1.64",
@@ -102,7 +102,7 @@ var cmdSelfUpdate = &cobra.Command{
 // or find the latest micro release for a given major.minor release.
 // Note: this will not be applied to beta releases.
 func GetVersion(ctx context.Context, beta bool, version string) (newVersion, siteURL string, err error) {
-	siteURL = "https://github.com/dogbutcat/gclone/releases/download/"
+	siteURL = "https://github.com/ebadenes/eclone/releases/download/"
 	if beta {
 		fmt.Println("No beta version support.")
 		return
@@ -112,7 +112,7 @@ func GetVersion(ctx context.Context, beta bool, version string) (newVersion, sit
 		// Request the latest release number from the download site
 		_, newVersion, _, err = versionCmd.GetVersion(
 			ctx,
-			"https://github.com/dogbutcat/gclone/releases/latest/download"+
+			"https://github.com/ebadenes/eclone/releases/latest/download"+
 				"/version.txt",
 		)
 		return
@@ -141,7 +141,7 @@ func isLatest(vA string, vB string) bool {
 	return true
 }
 
-// InstallUpdate performs gclone self-update
+// InstallUpdate performs eclone self-update
 func InstallUpdate(ctx context.Context, opt *Options) error {
 	// Find the latest release number
 	if opt.Stable && opt.Beta {
@@ -163,7 +163,7 @@ func InstallUpdate(ctx context.Context, opt *Options) error {
 
 	// not specified version and installed version is newer then remote
 	if opt.Version == "" && isLatest(oldVersion, newVersion) {
-		fs.Logf(nil, "gclone is up to date")
+		fs.Logf(nil, "eclone is up to date")
 		return nil
 	}
 
@@ -174,7 +174,7 @@ func InstallUpdate(ctx context.Context, opt *Options) error {
 		} else {
 			err := installPackage(ctx, opt.Beta, newVersion, siteURL, opt.Package)
 			if err == nil {
-				fs.Logf(nil, "Successfully updated gclone package from version %s to version %s", oldVersion, newVersion)
+				fs.Logf(nil, "Successfully updated eclone package from version %s to version %s", oldVersion, newVersion)
 			}
 			return err
 		}
@@ -192,7 +192,7 @@ func InstallUpdate(ctx context.Context, opt *Options) error {
 	}
 
 	if opt.Check {
-		fmt.Printf("Without --check this would install gclone version %s at %s\n", newVersion, targetFile)
+		fmt.Printf("Without --check this would install eclone version %s at %s\n", newVersion, targetFile)
 		return nil
 	}
 
@@ -219,18 +219,18 @@ func InstallUpdate(ctx context.Context, opt *Options) error {
 	// Download the update as a temporary file
 	err = downloadUpdate(ctx, opt.Beta, newVersion, siteURL, newFile, "zip")
 	if err != nil {
-		return fmt.Errorf("failed to update gclone: %w", err)
+		return fmt.Errorf("failed to update eclone: %w", err)
 	}
 
 	err = replaceExecutable(targetFile, newFile, savedFile)
 	if err == nil {
-		fs.Logf(nil, "Successfully updated gclone from version %s to version %s", oldVersion, newVersion)
+		fs.Logf(nil, "Successfully updated eclone from version %s to version %s", oldVersion, newVersion)
 	}
 	return err
 }
 
 func installPackage(ctx context.Context, beta bool, version, siteURL, packageFormat string) error {
-	tempFile, err := os.CreateTemp("", "gclone.*."+packageFormat)
+	tempFile, err := os.CreateTemp("", "eclone.*."+packageFormat)
 	if err != nil {
 		return fmt.Errorf("unable to write temporary package: %w", err)
 	}
@@ -343,26 +343,26 @@ func downloadUpdate(ctx context.Context, beta bool, version, siteURL, newFile, p
 	arch := runtime.GOARCH
 	if arch == "arm" {
 		// Check the ARM compatibility level of the current CPU.
-		// We don't know if this matches the gclone binary currently running, it
+		// We don't know if this matches the eclone binary currently running, it
 		// could for example be a ARMv6 variant running on a ARMv7 compatible CPU,
 		// so we will simply pick the best possible variant.
 		switch buildinfo.GetSupportedGOARM() {
 		case 7:
 			// This system can run any binaries built with GOARCH=arm, including GOARM=7.
-			// Pick the ARMv7 variant of gclone, published with suffix "arm-v7".
+			// Pick the ARMv7 variant of eclone, published with suffix "arm-v7".
 			arch = "arm-v7"
 		case 6:
 			// This system can run binaries built with GOARCH=arm and GOARM=6 or lower.
-			// Pick the ARMv6 variant of gclone, published with suffix "arm-v6".
+			// Pick the ARMv6 variant of eclone, published with suffix "arm-v6".
 			arch = "arm-v6"
 		case 5:
 			// This system can only run binaries built with GOARCH=arm and GOARM=5.
-			// Pick the ARMv5 variant of gclone, which also works without hardfloat,
+			// Pick the ARMv5 variant of eclone, which also works without hardfloat,
 			// published with suffix "arm".
 			arch = "arm"
 		}
 	}
-	archiveFilename := fmt.Sprintf("gclone-%s-%s-%s.%s", version, osName, arch, packageFormat)
+	archiveFilename := fmt.Sprintf("eclone-%s-%s-%s.%s", version, osName, arch, packageFormat)
 	archiveURL := fmt.Sprintf("%s/%s/%s", siteURL, version, archiveFilename)
 	archiveBuf, err := downloadFile(ctx, archiveURL)
 	if err != nil {
@@ -386,7 +386,7 @@ func downloadUpdate(ctx context.Context, beta bool, version, siteURL, newFile, p
 		return nil
 	}
 
-	entryName := fmt.Sprintf("gclone-%s-%s-%s/gclone", version, osName, arch)
+	entryName := fmt.Sprintf("eclone-%s-%s-%s/eclone", version, osName, arch)
 	if runtime.GOOS == "windows" {
 		entryName += ".exe"
 	}

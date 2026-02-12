@@ -159,7 +159,7 @@ func buildZip(dir string) string {
 	// Now build the zip
 	// run("cp", "-a", "../MANUAL.txt", filepath.Join(dir, "README.txt"))
 	// run("cp", "-a", "../MANUAL.html", filepath.Join(dir, "README.html"))
-	// run("cp", "-a", "../gclone.1", dir)
+	// run("cp", "-a", "../eclone.1", dir)
 	if *gitLog != "" {
 		run("cp", "-a", *gitLog, dir)
 	}
@@ -245,7 +245,7 @@ func generateResourceWindows(version, arch string) func() {
 func compileArch(version, goos, goarch, dir string) bool {
 	log.Printf("Compiling %s/%s into %s", goos, goarch, dir)
 	goarchBase := stripVersion(goarch)
-	output := filepath.Join(dir, "gclone")
+	output := filepath.Join(dir, "eclone")
 	if goos == "windows" {
 		output += ".exe"
 		if cleanupFn := generateResourceWindows(version, goarchBase); cleanupFn != nil {
@@ -374,7 +374,7 @@ func compile(version string) {
 		if goos == "darwin" {
 			userGoos = "osx"
 		}
-		dir := filepath.Join("gclone-" + version + "-" + userGoos + "-" + goarch)
+		dir := filepath.Join("eclone-" + version + "-" + userGoos + "-" + goarch)
 		run <- func() {
 			if !compileArch(version, goos, goarch, dir) {
 				failuresMu.Lock()
@@ -406,7 +406,7 @@ func main() {
 		run("mkdir", "build")
 	}
 	chdir("build")
-	err := os.WriteFile("version.txt", []byte(fmt.Sprintf("gclone %s\n", version)), 0666)
+	err := os.WriteFile("version.txt", []byte(fmt.Sprintf("eclone %s\n", version)), 0666)
 	if err != nil {
 		log.Fatalf("Couldn't write version.txt: %v", err)
 	}

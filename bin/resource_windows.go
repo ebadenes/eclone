@@ -41,7 +41,7 @@ func main() {
 	}
 
 	// Define flags
-	binary := flag.String("binary", "gclone.exe", `The name of the binary to generate resource for, e.g. "gclone.exe" or "libgclone.dll"`)
+	binary := flag.String("binary", "eclone.exe", `The name of the binary to generate resource for, e.g. "eclone.exe" or "libeclone.dll"`)
 	arch := flag.String("arch", runtime.GOARCH, `Architecture of resource file, or the target GOARCH, "386", "amd64", "arm", or "arm64"`)
 	version := flag.String("version", fs.Version, "Version number or tag name")
 	icon := flag.String("icon", path.Join(projectDir, "graphics/logo/ico/logo_symbol_color.ico"), "Path to icon file to embed in an .exe binary")

@@ -3,8 +3,8 @@ package all
 
 import (
 	// Active commands
-	_ "github.com/dogbutcat/gclone/cmd/copy"
-	_ "github.com/dogbutcat/gclone/cmd/selfupdate"
+	_ "github.com/ebadenes/eclone/cmd/copy"
+	_ "github.com/ebadenes/eclone/cmd/selfupdate"
 	_ "github.com/rclone/rclone/cmd"
 	_ "github.com/rclone/rclone/cmd/about"
 	_ "github.com/rclone/rclone/cmd/authorize"
@@ -75,5 +75,5 @@ import (
 	_ "github.com/rclone/rclone/cmd/test/memory"
 	_ "github.com/rclone/rclone/cmd/touch"
 	_ "github.com/rclone/rclone/cmd/tree"
-	_ "github.com/rclone/rclone/cmd/version"
+	_ "github.com/ebadenes/eclone/cmd/version"
 )

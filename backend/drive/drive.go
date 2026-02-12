@@ -1021,7 +1021,7 @@ func (f *Fs) changeSvc(ctx context.Context) {
 	 */
 	if err := f.changeServiceAccountFile(ctx, os.ExpandEnv(newSa)); err == nil {
 		sfp.activeSa(newSa)
-		fs.Logf(nil, "loading gclone sa file: %s", opt.ServiceAccountFile)
+		fs.Logf(nil, "loading eclone sa file: %s", opt.ServiceAccountFile)
 	} else {
 		sfp.revertStaleSa(oldFile)
 		fmt.Println("change sa file: ", newSa, " failed: ", err)
@@ -1038,7 +1038,7 @@ func (f *Fs) rollingSvc(ctx context.Context) {
 	newSa := sfp.rollup()
 	if err := f.changeServiceAccountFile(ctx, os.ExpandEnv(newSa)); err == nil {
 		sfp.activeSa(newSa)
-		fs.Infof(nil, "rolling gclone sa file: %s", newSa)
+		fs.Infof(nil, "rolling eclone sa file: %s", newSa)
 	} else {
 		// fs.Errorf(f, "roll sa file: %s failed: %w", newSa, err)
 		fmt.Println("roll sa file: ", newSa, " failed: ", err)

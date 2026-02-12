@@ -3,7 +3,7 @@ package all
 
 import (
 	// Active file systems
-	_ "github.com/dogbutcat/gclone/backend/drive"
+	_ "github.com/ebadenes/eclone/backend/drive"
 	_ "github.com/rclone/rclone/backend/alias"
 	_ "github.com/rclone/rclone/backend/azureblob"
 	_ "github.com/rclone/rclone/backend/azurefiles"

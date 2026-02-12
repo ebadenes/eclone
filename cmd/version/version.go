@@ -31,17 +31,17 @@ func init() {
 }
 
 var commandDefinition = &cobra.Command{
-	Use:   "gversion",
+	Use:   "eversion",
 	Short: `Show the version number.`,
 	Long: `
-Show the gclone version number, the go version, the build target
+Show the eclone version number, the go version, the build target
 OS and architecture, the runtime OS and kernel version and bitness,
 build tags and the type of executable (static or dynamic).
 
 For example:
 
-    $ gclone gversion
-    gclone v1.64.0-mod1.6.0
+    $ eclone eversion
+    eclone v1.71.0-mod2.0.0
     - os/version: ubuntu 18.04 (64 bit)
     - os/kernel: 4.15.0-136-generic (x86_64)
     - os/type: linux
@@ -50,22 +50,22 @@ For example:
     - go/linking: static
     - go/tags: none
 
-Note: before gclone version 1.64 the os/type and os/arch lines were merged,
+Note: before eclone version 1.71 the os/type and os/arch lines were merged,
       and the "go/version" line was tagged as "go version".
 
 If you supply the --check flag, then it will do an online check to
 compare your version with the latest release and the latest beta.
 
-    $ gclone gversion --check
-    yours:  v1.64.0-mod1.6.0
-    latest: v1.67.0-mod1.6.2          (released 2024-07-25)
+    $ eclone eversion --check
+    yours:  v1.71.0-mod2.0.0
+    latest: v1.71.0-mod2.0.0          (released 2025-01-01)
 
 Or
 
-    $ gclone gversion --check
-    yours:  v1.64.0-mod1.6.0
-    latest: v1.67.0-mod1.6.2          (released 2024-07-25)
-      upgrade: https://github.com/dogbutcat/gclone/releases/latest
+    $ eclone eversion --check
+    yours:  v1.71.0-mod2.0.0
+    latest: v1.72.0-mod2.1.0          (released 2025-06-01)
+      upgrade: https://github.com/ebadenes/eclone/releases/latest
 
 `,
 	Annotations: map[string]string{
@@ -96,7 +96,7 @@ func ShowVersion() {
 
 	arch := buildinfo.GetArch()
 
-	fmt.Printf("gclone %s\n", fs.Version)
+	fmt.Printf("eclone %s\n", fs.Version)
 	fmt.Printf("- os/version: %s\n", osVersion)
 	fmt.Printf("- os/kernel: %s\n", osKernel)
 	fmt.Printf("- os/type: %s\n", runtime.GOOS)
@@ -137,7 +137,7 @@ func GetVersion(ctx context.Context, url string) (v *semver.Version, vs string, 
 		return v, vs, date, err
 	}
 	vs = strings.TrimSpace(string(bodyBytes))
-	vs = strings.TrimPrefix(vs, "gclone ")
+	vs = strings.TrimPrefix(vs, "eclone ")
 	vs = strings.TrimRight(vs, "β")
 	date, err = http.ParseTime(resp.Header.Get("Last-Modified"))
 	if err != nil {
@@ -168,7 +168,7 @@ func CheckVersion(ctx context.Context) {
 		v, _ := semver.NewVersion(vNew)
 		m, _ := semver.NewVersion(vMod)
 		if err != nil {
-			fs.Errorf(nil, "Failed to get gclone %s version: %v", what, err)
+			fs.Errorf(nil, "Failed to get eclone %s version: %v", what, err)
 			return
 		}
 		fmt.Printf("%-8s%-40v %20s\n",
@@ -188,7 +188,7 @@ func CheckVersion(ctx context.Context) {
 	fmt.Printf("yours:  %-13s\n", fs.Version)
 	printVersion(
 		"latest",
-		"https://github.com/dogbutcat/gclone/releases/latest",
+		"https://github.com/ebadenes/eclone/releases/latest",
 	)
 	// printVersion(
 	// 	"beta",

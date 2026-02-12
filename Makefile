@@ -44,9 +44,9 @@ BUILDTAGS=-tags "$(GOTAGS)"
 LINTTAGS=--build-tags "$(GOTAGS)"
 endif
 
-.PHONY: gclone test_all vars version
+.PHONY: eclone test_all vars version
 
-gclone:
+eclone:
 ifeq ($(GO_OS),windows)
 	go run bin/resource_windows.go -version $(TAG) -syso resource_windows_`go env GOARCH`.syso
 endif
@@ -55,8 +55,8 @@ ifeq ($(GO_OS),windows)
 	rm resource_windows_`go env GOARCH`.syso
 endif
 	mkdir -p `go env GOPATH`/bin/
-	cp -av gclone`go env GOEXE` `go env GOPATH`/bin/gclone`go env GOEXE`.new
-	mv -v `go env GOPATH`/bin/gclone`go env GOEXE`.new `go env GOPATH`/bin/gclone`go env GOEXE`
+	cp -av eclone`go env GOEXE` `go env GOPATH`/bin/eclone`go env GOEXE`.new
+	mv -v `go env GOPATH`/bin/eclone`go env GOEXE`.new `go env GOPATH`/bin/eclone`go env GOEXE`
 
 test_all:
 	go install --ldflags "-s -X github.com/rclone/rclone/fs.Version=$(TAG)" $(BUILDTAGS) $(BUILD_ARGS) github.com/rclone/rclone/fstest/test_all
@@ -127,31 +127,31 @@ tidy:
 doc:
 	@echo "doc part"
 
-install: gclone
+install: eclone
 	install -d ${DESTDIR}/usr/bin
-	install -t ${DESTDIR}/usr/bin ${GOPATH}/bin/gclone
+	install -t ${DESTDIR}/usr/bin ${GOPATH}/bin/eclone
 
 clean:
 	go clean ./...
 	find . -name \*~ | xargs -r rm -f
 	rm -rf build docs/public
-	rm -f gclone fs/operations/operations.test fs/sync/sync.test fs/test_all.log test.log
+	rm -f eclone fs/operations/operations.test fs/sync/sync.test fs/test_all.log test.log
 
 website:
 
 
 tarball:
-	git archive -9 --format=tar.gz --prefix=gclone-$(TAG)/ -o build/gclone-$(TAG).tar.gz $(TAG)
+	git archive -9 --format=tar.gz --prefix=eclone-$(TAG)/ -o build/eclone-$(TAG).tar.gz $(TAG)
 
 vendorball:
 	go mod vendor
-	tar -zcf build/gclone-$(TAG)-vendor.tar.gz vendor
+	tar -zcf build/eclone-$(TAG)-vendor.tar.gz vendor
 	rm -rf vendor
 
 sign_upload:
-	cd build && md5sum gclone-v* | gpg --clearsign > MD5SUMS
-	cd build && sha1sum gclone-v* | gpg --clearsign > SHA1SUMS
-	cd build && sha256sum gclone-v* | gpg --clearsign > SHA256SUMS
+	cd build && md5sum eclone-v* | gpg --clearsign > MD5SUMS
+	cd build && sha1sum eclone-v* | gpg --clearsign > SHA1SUMS
+	cd build && sha256sum eclone-v* | gpg --clearsign > SHA256SUMS
 
 check_sign:
 	cd build && gpg --verify MD5SUMS && gpg --decrypt MD5SUMS | md5sum -c
@@ -196,8 +196,8 @@ startdev:
 startstable:
 
 winzip:
-	zip -9 gclone-$(TAG).zip gclone.exe
+	zip -9 eclone-$(TAG).zip eclone.exe
 
-fixgclonedepmissing:
+fixeclonedepmissing:
 	go mod download golang.org/x/mobile
 	go mod download github.com/dop251/scsu
