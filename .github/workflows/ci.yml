@@ -1,0 +1,45 @@
+---
+# Lightweight CI build for eclone
+# Runs on every push to master and on pull requests
+# Full multi-platform build only triggers on tags (see build.yml)
+
+name: ci
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  build:
+    name: Build & verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24'
+          check-latest: true
+
+      - name: Build eclone
+        run: |
+          go build -v -buildvcs=true \
+            -ldflags "-s -w -X github.com/rclone/rclone/fs.Version=$(make version)" \
+            -o eclone .
+
+      - name: Verify binary
+        run: ./eclone eversion
+
+      - name: Upload binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: eclone-linux-amd64
+          path: eclone
+          retention-days: 7
