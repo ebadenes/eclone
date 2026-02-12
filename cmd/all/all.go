@@ -5,8 +5,13 @@ import (
 	// Active commands
 	_ "github.com/ebadenes/eclone/cmd/copy"
 	_ "github.com/ebadenes/eclone/cmd/selfupdate"
+	_ "github.com/ebadenes/eclone/cmd/version"
 	_ "github.com/rclone/rclone/cmd"
 	_ "github.com/rclone/rclone/cmd/about"
+	_ "github.com/rclone/rclone/cmd/archive"
+	_ "github.com/rclone/rclone/cmd/archive/create"
+	_ "github.com/rclone/rclone/cmd/archive/extract"
+	_ "github.com/rclone/rclone/cmd/archive/list"
 	_ "github.com/rclone/rclone/cmd/authorize"
 	_ "github.com/rclone/rclone/cmd/backend"
 	_ "github.com/rclone/rclone/cmd/bisync"
@@ -75,5 +80,4 @@ import (
 	_ "github.com/rclone/rclone/cmd/test/memory"
 	_ "github.com/rclone/rclone/cmd/touch"
 	_ "github.com/rclone/rclone/cmd/tree"
-	_ "github.com/ebadenes/eclone/cmd/version"
 )

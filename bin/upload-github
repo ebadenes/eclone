@@ -6,7 +6,7 @@
 
 set -e
 
-REPO="dogbutcat/gclone"
+REPO="ebadenes/eclone"
 
 if [ "$1" == "" ]; then
     echo "Syntax: $0 Version"
@@ -17,14 +17,14 @@ VERSION="$1"
 
 function create_release() {
 cat > "/tmp/${VERSION}-release-notes" <<EOF
-This is the ${VERSION} release of gclone.
+This is the ${VERSION} release of eclone.
 EOF
 
 echo "Making release ${VERSION} to repo ${REPO}"
 
 gh release create "${VERSION}" \
     --repo ${REPO} \
-    --title "gclone ${VERSION}" \
+    --title "eclone ${VERSION}" \
     --notes-file "/tmp/${VERSION}-release-notes"
 }
 {
