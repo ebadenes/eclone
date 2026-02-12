@@ -4,7 +4,7 @@ An enhanced fork of [rclone](https://github.com/rclone/rclone) with advanced Goo
 
 Based on [gclone](https://github.com/dogbutcat/gclone) with additional features ported from [fclone](https://github.com/mawaya/rclone), including SA preloading, 25-hour blacklisting, and anti-thrashing protection.
 
-**Current version:** `v1.71.0-mod2.0.0` (rclone v1.71.0 base)
+**Current version:** `v1.73.0-mod2.0.2` (rclone v1.73.0 base)
 
 ## Features
 
@@ -24,9 +24,34 @@ All standard rclone features, plus:
 | Auto-assign SA | fclone | Automatically picks an SA if none configured but SA path exists |
 | Auto-lower pacer | fclone | Reduces pacer min sleep when >10 SAs preloaded (more headroom) |
 
-## Build
+## Install
 
-### With Docker (recommended, no Go installation needed)
+### Quick install (Linux/macOS/BSD)
+
+```sh
+sudo -v ; curl -fsSL https://raw.githubusercontent.com/ebadenes/eclone/master/install.sh | sudo bash
+```
+
+This auto-detects your OS and architecture, downloads the latest release from GitHub, and installs the binary to `/usr/bin` (Linux/BSD) or `/usr/local/bin` (macOS).
+
+### Docker (no build needed)
+
+```dockerfile
+FROM alpine:latest
+RUN apk add --no-cache ca-certificates fuse3 tzdata curl unzip bash
+RUN curl -fsSL https://raw.githubusercontent.com/ebadenes/eclone/master/install.sh | bash
+ENTRYPOINT ["eclone"]
+```
+
+### Self-update
+
+```sh
+sudo eclone eselfupdate
+```
+
+## Build from source
+
+### With Docker (no Go installation needed)
 
 ```sh
 # Clone the repository
@@ -51,7 +76,7 @@ go build -ldflags="-s -w" -o eclone .
 go build -v -tags 'cmount' -ldflags="-s -w" -o eclone .
 ```
 
-### Install
+### Manual install after build
 
 ```sh
 sudo cp eclone /usr/local/bin/eclone
@@ -126,7 +151,7 @@ eclone copy gc:{id1} gc:{id2} \
 ### 5. Self-Update
 
 ```sh
-eclone eselfupdate [--check] [--output path] [--version v] [--package zip|deb|rpm]
+sudo eclone eselfupdate [--check] [--output path] [--version v] [--package zip|deb|rpm]
 ```
 
 ## How SA Rotation Works
