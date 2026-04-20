@@ -52,7 +52,7 @@ if [ -z "$unzip_tool" ]; then
 fi
 
 # Determine install directory based on whether we are root or not
-if [ "$(id -u)" -ne 0 ]; then
+if [ "${EUID:-$(id -u)}" -ne 0 ]; then
     printf "\nYou are not running as root.\n"
     printf "Install eclone to ~/.local/bin instead of /usr/bin? [Y/n] "
     read -r answer </dev/tty
