@@ -51,6 +51,21 @@ if [ -z "$unzip_tool" ]; then
     exit 4
 fi
 
+# Determine install directory based on whether we are root or not
+if [ "$(id -u)" -ne 0 ]; then
+    printf "\nYou are not running as root.\n"
+    printf "Install eclone to ~/.local/bin instead of /usr/bin? [Y/n] "
+    read -r answer </dev/tty
+    if [ -z "$answer" ] || [ "$answer" = "Y" ] || [ "$answer" = "y" ]; then
+        binTgtDir="$HOME/.local/bin"
+        mkdir -p "$binTgtDir"
+        install_as_user=1
+    else
+        printf "\nPlease re-run with sudo to install system-wide.\n\n"
+        exit 1
+    fi
+fi
+
 # Make sure we don't create a root owned .config/rclone directory #2127
 export XDG_CONFIG_HOME=config
 
@@ -174,16 +189,28 @@ cd $unzip_dir/*
 case "$OS" in
   'linux')
     #binary
-    cp eclone /usr/bin/eclone.new
-    chmod 755 /usr/bin/eclone.new
-    chown root:root /usr/bin/eclone.new
-    mv /usr/bin/eclone.new /usr/bin/eclone
+    if [ -n "$install_as_user" ]; then
+        cp eclone "${binTgtDir}/eclone.new"
+        chmod 755 "${binTgtDir}/eclone.new"
+        mv "${binTgtDir}/eclone.new" "${binTgtDir}/eclone"
+    else
+        cp eclone /usr/bin/eclone.new
+        chmod 755 /usr/bin/eclone.new
+        chown root:root /usr/bin/eclone.new
+        mv /usr/bin/eclone.new /usr/bin/eclone
+    fi
     ;;
   'freebsd'|'openbsd'|'netbsd')
     #binary
-    cp eclone /usr/bin/eclone.new
-    chown root:wheel /usr/bin/eclone.new
-    mv /usr/bin/eclone.new /usr/bin/eclone
+    if [ -n "$install_as_user" ]; then
+        cp eclone "${binTgtDir}/eclone.new"
+        chmod 755 "${binTgtDir}/eclone.new"
+        mv "${binTgtDir}/eclone.new" "${binTgtDir}/eclone"
+    else
+        cp eclone /usr/bin/eclone.new
+        chown root:wheel /usr/bin/eclone.new
+        mv /usr/bin/eclone.new /usr/bin/eclone
+    fi
     ;;
   'osx')
     #binary
@@ -204,5 +231,11 @@ version=$(eclone --version 2>>errors | head -n 1)
 rm -rf "$tmp_dir"
 
 printf "\n${version} has successfully installed."
+if [ -n "$install_as_user" ]; then
+    case ":$PATH:" in
+        *":${binTgtDir}:"*) ;;
+        *) printf "\nNOTE: Add ${binTgtDir} to your PATH (e.g. add to ~/.bashrc or ~/.profile):\n  export PATH=\"\$PATH:${binTgtDir}\"\n" ;;
+    esac
+fi
 printf '\nNow run "eclone config" for setup. Check https://github.com/ebadenes/eclone for more details.\n\n'
 exit 0
